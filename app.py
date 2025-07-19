@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime
 from typing import List, Dict
+import time
 
 # Import modular components
 from database import PromptDatabase
@@ -31,37 +32,40 @@ def init_session_state():
         st.session_state.intent_analysis = {}
     if 'similar_prompts_used' not in st.session_state:
         st.session_state.similar_prompts_used = []
+    if 'rating_submitted' not in st.session_state:
+        st.session_state.rating_submitted = False
 
 # --- Main Application ---
 def main():
     init_session_state()
-
+    
     # --- Sidebar ---
     st.sidebar.title("🎯 PromptCraft")
     st.sidebar.markdown("*AI Prompt Engineering Assistant*")
     
     api_key = st.sidebar.text_input("Enter your Gemini API Key:", type="password")
     
-    # UPDATED: Added a custom model input option
+    # Model selection
     predefined_models = (
-        "gemini-1.5-pro-latest",    # Top-tier GA model
-        "gemini-1.5-flash-latest",  # Fast and efficient GA model
-        "gemini-1.0-pro",           # Stable older GA model
+        "gemini-1.5-pro-latest",
+        "gemini-1.5-flash-latest", 
+        "gemini-1.0-pro",
         "gemini-2.0-flash",
         "gemini-2.0-pro",
         "gemini-2.5-flash",
         "gemini-2.5-pro"
     )
+    
     custom_option = "Enter Custom Model..."
     model_options = predefined_models + (custom_option,)
-
+    
     selected_option = st.sidebar.selectbox(
         "Choose a Gemini Model",
         options=model_options,
-        index=1, # Default to gemini-1.5-flash-latest
-        help="Select a standard model or choose 'Custom' to enter a specific one (e.g., a preview model)."
+        index=1,
+        help="Select a standard model or choose 'Custom' to enter a specific one."
     )
-
+    
     model_name = ""
     if selected_option == custom_option:
         model_name = st.sidebar.text_input(
@@ -71,25 +75,24 @@ def main():
         ).strip()
     else:
         model_name = selected_option
-
+    
     if not api_key:
         st.sidebar.warning("Please enter your Gemini API key to continue.")
         st.sidebar.markdown("Get your free API key from [Google AI Studio](https://makersuite.google.com/app/apikey)")
         return
     
-    # Ensure a model name is available before proceeding
     if not model_name:
         st.sidebar.error("Please enter a custom model name.")
         return
-
+    
     try:
         db = PromptDatabase()
         engineer = PromptEngineer(api_key=api_key, model_name=model_name)
     except Exception as e:
         st.error(f"Error initializing PromptCraft: {e}")
-        st.info("Please ensure your API key is correct and that the selected model is valid and available for your account.")
+        st.info("Please ensure your API key is correct and the selected model is available.")
         return
-
+    
     # Stats in sidebar
     st.sidebar.markdown("---")
     st.sidebar.subheader("📊 PromptCraft Stats")
@@ -100,14 +103,14 @@ def main():
         st.sidebar.metric("Average Rating", f"{stats.get('avg_rating', 0)}/5")
     except Exception as e:
         st.sidebar.error(f"Could not load stats: {e}")
-
+    
     # --- Main Interface ---
     st.title("🎯 PromptCraft")
     st.markdown("### Transform your ideas into powerful AI prompts")
     
     user_goal = st.text_area(
         "What do you want to create a prompt for?",
-        placeholder="e.g., 'Create a weekly social media content plan for my coffee shop' or 'Write a professional email to decline a job offer'",
+        placeholder="e.g., 'Create a weekly social media content plan for my coffee shop'",
         height=100
     )
     
@@ -119,7 +122,9 @@ def main():
                     st.session_state.generated_prompts = []
                     st.session_state.rated_prompts = set()
                     st.session_state.show_rating_form = False
-
+                    st.session_state.selected_prompt = None
+                    st.session_state.rating_submitted = False
+                    
                     intent_analysis = engineer.analyze_user_intent(user_goal)
                     similar_prompts = db.get_similar_prompts(user_goal)
                     variations = engineer.generate_prompt_variations(user_goal, similar_prompts)
@@ -130,12 +135,13 @@ def main():
                     st.session_state.similar_prompts_used = similar_prompts
                     
                     db.log_usage(user_goal, len(variations))
+                    
                 except Exception as e:
                     st.error(f"An error occurred during prompt generation: {e}")
-                    st.info("This could be due to an invalid custom model name, API key issues, or content safety filters.")
+                    st.info("This could be due to API key issues or content safety filters.")
         else:
             st.warning("Please enter a goal to generate prompts.")
-
+    
     # --- Display Results ---
     if st.session_state.generated_prompts:
         st.markdown("---")
@@ -153,8 +159,8 @@ def display_analysis_and_rag():
     """Displays the expander with intent analysis and RAG context."""
     with st.expander("🔍 Intent Analysis & RAG Context", expanded=True):
         analysis = st.session_state.intent_analysis
-        
         col1, col2, col3 = st.columns(3)
+        
         col1.metric("Category", analysis.get('category', 'N/A'))
         col2.metric("Complexity", f"{analysis.get('complexity', 'N/A')}/5")
         col3.write(f"**Tags:** {', '.join(analysis.get('tags', []))}")
@@ -170,11 +176,13 @@ def display_analysis_and_rag():
 def display_prompt_tabs():
     """Displays the generated prompts in separate tabs."""
     tabs = st.tabs([f"Variation {i+1}" for i in range(len(st.session_state.generated_prompts))])
+    
     for i, (tab, prompt) in enumerate(zip(tabs, st.session_state.generated_prompts)):
         with tab:
             st.text_area(f"Prompt {i+1}", value=prompt, height=250, key=f"prompt_{i}", label_visibility="collapsed")
             
             cols = st.columns(3)
+            
             if cols[0].button(f"📋 Copy", key=f"copy_{i}"):
                 st.code(prompt, language="text")
                 st.success("Prompt displayed above for easy copying!")
@@ -182,6 +190,8 @@ def display_prompt_tabs():
             if i in st.session_state.rated_prompts:
                 cols[1].success("✅ Rated")
             elif cols[1].button(f"⭐ Rate", key=f"rate_{i}"):
+                # Clear any existing rating state first
+                st.session_state.rating_submitted = False
                 st.session_state.selected_prompt = i
                 st.session_state.show_rating_form = True
                 st.rerun()
@@ -190,22 +200,41 @@ def display_prompt_tabs():
                 st.info("💡 Copy the prompt and test it with your preferred AI tool!")
 
 def display_rating_form(db: PromptDatabase):
-    """Displays the rating form when a prompt is selected for rating."""
+    """Enhanced rating form with better error handling and state management"""
     if st.session_state.show_rating_form and st.session_state.selected_prompt is not None:
         idx = st.session_state.selected_prompt
+        
+        # Validate the selected prompt index
+        if idx >= len(st.session_state.generated_prompts):
+            st.session_state.show_rating_form = False
+            st.session_state.selected_prompt = None
+            st.rerun()
+            return
+            
         prompt_to_rate = st.session_state.generated_prompts[idx]
 
-        with st.form(key=f"rating_form_{idx}"):
+        with st.form(key=f"rating_form_{idx}_{time.time()}", clear_on_submit=True):
             st.subheader(f"⭐ Rate Variation {idx + 1}")
             st.text_area("Selected Prompt", value=prompt_to_rate, height=150, disabled=True)
-            
-            rating = st.selectbox("Rating (1-5 stars)", options=[5, 4, 3, 2, 1], format_func=lambda x: f"{'⭐' * x}")
-            feedback = st.text_area("Optional feedback", placeholder="What worked well? What could be improved?")
-            
+
+            rating = st.selectbox("Rating (1-5 stars)", options=[5, 4, 3, 2, 1], 
+                                format_func=lambda x: f"{'⭐' * x}")
+            feedback = st.text_area("Optional feedback", 
+                                  placeholder="What worked well? What could be improved?")
+
             submitted = st.form_submit_button("✅ Submit Rating", type="primary")
-            
-            if submitted:
+
+            if submitted and not st.session_state.rating_submitted:
                 try:
+                    # Set flag to prevent double submission
+                    st.session_state.rating_submitted = True
+                    
+                    # Update session state BEFORE database operation
+                    st.session_state.rated_prompts.add(idx)
+                    st.session_state.show_rating_form = False
+                    st.session_state.selected_prompt = None
+                    
+                    # Database operation with error handling
                     db.save_prompt(
                         user_goal=st.session_state.user_goal,
                         generated_prompt=prompt_to_rate,
@@ -214,13 +243,17 @@ def display_rating_form(db: PromptDatabase):
                         category=st.session_state.intent_analysis.get('category'),
                         tags=st.session_state.intent_analysis.get('tags')
                     )
-                    st.session_state.rated_prompts.add(idx)
-                    st.session_state.show_rating_form = False
-                    st.session_state.selected_prompt = None
+                    
                     st.success("🎉 Thank you for your feedback!")
+                    time.sleep(0.5)  # Brief pause to show success message
                     st.rerun()
+                    
                 except Exception as e:
                     st.error(f"Failed to save rating: {e}")
+                    # Reset form state on error
+                    st.session_state.show_rating_form = False
+                    st.session_state.selected_prompt = None
+                    st.session_state.rating_submitted = False
 
 if __name__ == "__main__":
     main()
