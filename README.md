@@ -93,7 +93,3 @@ Contributions are what make the open-source community such an amazing place to l
 ## 📄 License
 
 This project is distributed under the MIT License.
-
-## 📬 Contact
-
-Project Link: [https://github.com/your-username/promptcraft](https://github.com/your-username/promptcraft)
