@@ -23,7 +23,7 @@ Follow these instructions to set up and run PromptCraft on your local machine.
 
 ### Prerequisites
 
-*   Python 3.8 or newer
+*   Python 3.10
 *   A Google Gemini API Key. You can get a free key from [Google AI Studio](https://makersuite.google.com/app/apikey).
 
 ### Installation
@@ -75,7 +75,7 @@ Follow these instructions to set up and run PromptCraft on your local machine.
 **A:** Google often releases new models in a "preview" state before they are generally available. These models might have new features or improved performance. The custom model input allows you to experiment with these new models (e.g., `gemini-2.5-pro-preview-08-01`) as soon as they are announced, without waiting for an application update.
 
 **Q: What's the difference between the listed Gemini models?**
-**A:** The models offer a trade-off between performance, speed, and cost. `gemini-1.5-pro-latest` is highly capable for complex tasks, while `gemini-1.5-flash-latest` is optimized for speed and cost-efficiency.
+**A:** The models offer a trade-off between performance, speed, and cost. `gemini-2.0-pro` is highly capable for complex tasks, while `gemini-2.0-flash` is optimized for speed and cost-efficiency.
 
 **Q: Where is my data (prompts, ratings) stored?**
 **A:** All data is stored locally in a file named `promptcraft.db` in the project's root directory. You have full ownership and control over this data.
